@@ -9,6 +9,8 @@ return [
 		['name' => 'chat#react', 'url' => '/chat/{room}/react', 'verb' => 'POST'],
 		['name' => 'chat#presenceSet', 'url' => '/chat/{room}/presence', 'verb' => 'POST'],
 		['name' => 'chat#presenceList', 'url' => '/chat/{room}/presence', 'verb' => 'GET'],
-        ['name' => 'chat#gemini', 'url' => '/ai/gemini', 'verb' => 'POST'],
+            ['name' => 'chat#gemini', 'url' => '/ai/gemini', 'verb' => 'POST'],
+            ['name' => 'chat#gemini', 'url' => '/ai/gemini', 'verb' => 'GET'],
+		['name' => 'chat#ping', 'url' => '/ai/ping', 'verb' => 'GET'],
 	]
 ];

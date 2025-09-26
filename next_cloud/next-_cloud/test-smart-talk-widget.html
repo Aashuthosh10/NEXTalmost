@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Talk Widget with AI - Test</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(45deg, #2196F3, #21CBF3);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .widget-container {
+            padding: 20px;
+            height: 600px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="container">
+            <div class="header">
+                <h1>💬 Smart Talk Widget</h1>
+                <p>Traditional communication widget for messaging</p>
+            </div>
+            <div class="widget-container">
+                <smart-talk-widget-enhanced></smart-talk-widget-enhanced>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Import the SmartTalkWidget component content
+        const SmartTalkWidgetEnhanced = {
+            template: `
+                <div class="smart-talk-container">
+                    <div class="widget-header">
+                        <div class="header-title">
+                            💬 Smart Talk
+                        </div>
+                    </div>
+
+                    <!-- Talk Content -->
+                    <div class="tab-content">
+                        <div class="messages-container" ref="talkMessages">
+                            <div v-for="message in talkMessages" :key="message.id" 
+                                 :class="['message', message.type]">
+                                <div class="message-avatar">
+                                    {{ message.type === 'user' ? '👤' : '💬' }}
+                                </div>
+                                <div class="message-content">
+                                    <div class="message-text">{{ message.text }}</div>
+                                    <div class="message-time">{{ message.time }}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="input-container">
+                            <input 
+                                v-model="talkInput" 
+                                @keyup.enter="sendTalk"
+                                placeholder="Type your message..."
+                                class="message-input"
+                            />
+                            <button @click="sendTalk" class="send-button">Send</button>
+                        </div>
+                    </div>
+                </div>
+            `,
+            data() {
+                return {
+                    talkInput: '',
+                    talkMessages: [
+                        {
+                            id: 1,
+                            type: 'system',
+                            text: 'Welcome to Smart Talk! Start a conversation.',
+                            time: new Date().toLocaleTimeString()
+                        }
+                    ]
+                }
+            },
+
+            methods: {
+                sendTalk() {
+                    if (!this.talkInput.trim()) return;
+                    
+                    this.talkMessages.push({
+                        id: Date.now(),
+                        type: 'user',
+                        text: this.talkInput,
+                        time: new Date().toLocaleTimeString()
+                    });
+                    
+                    // Simulate response
+                    setTimeout(() => {
+                        this.talkMessages.push({
+                            id: Date.now() + 1,
+                            type: 'other',
+                            text: 'Message received! This is the traditional chat functionality.',
+                            time: new Date().toLocaleTimeString()
+                        });
+                        this.scrollToBottom();
+                    }, 500);
+                    
+                    this.talkInput = '';
+                    this.scrollToBottom();
+                },
+                
+                scrollToBottom() {
+                    this.$nextTick(() => {
+                        const container = this.$refs.talkMessages;
+                        if (container) {
+                            container.scrollTop = container.scrollHeight;
+                        }
+                    });
+                }
+            }
+        };
+
+        const { createApp } = Vue;
+        
+        createApp({
+            components: {
+                SmartTalkWidgetEnhanced
+            }
+        }).mount('#app');
+    </script>
+
+    <style>
+        .smart-talk-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            background: white;
+        }
+
+        .widget-header {
+            background: linear-gradient(45deg, #2196F3, #21CBF3);
+            color: white;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .header-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .tab-content {
+            display: flex;
+            flex-direction: column;
+            height: calc(100% - 70px);
+        }
+
+        .messages-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 16px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            margin: 0 10px;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+        }
+
+        .message.ai .message-avatar,
+        .message.other .message-avatar,
+        .message.system .message-avatar {
+            background: linear-gradient(45deg, #2196F3, #21CBF3);
+        }
+
+        .message-content {
+            max-width: 70%;
+            background: white;
+            padding: 12px 16px;
+            border-radius: 18px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .message-text {
+            margin-bottom: 4px;
+            line-height: 1.4;
+        }
+
+        .message-time {
+            font-size: 12px;
+            opacity: 0.7;
+        }
+
+
+
+        .input-container {
+            display: flex;
+            padding: 20px;
+            gap: 10px;
+            border-top: 1px solid #e0e0e0;
+            background: white;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            outline: none;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        .message-input:focus {
+            border-color: #2196F3;
+        }
+
+        .send-button {
+            background: linear-gradient(45deg, #2196F3, #21CBF3);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: transform 0.2s ease;
+        }
+
+        .send-button:hover {
+            transform: translateY(-1px);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+
+    </style>
+</body>
+</html>

@@ -21,6 +21,10 @@ module.exports = {
         use: ['style-loader', 'css-loader']
       },
       {
+        test: /\.vue$/,
+        loader: 'vue-loader'
+      },
+      {
         test: /\.(png|jpe?g|gif|svg)$/,
         loader: 'file-loader',
         options: {
@@ -30,9 +34,10 @@ module.exports = {
     ]
   },
   resolve: {
-    extensions: ['.js'],
+    extensions: ['.js', '.vue'],
     alias: {
-      '@': path.resolve(__dirname, 'src')
+      '@': path.resolve(__dirname, 'src'),
+      'vue$': 'vue/dist/vue.esm.js'
     }
   },
   devtool: 'source-map'

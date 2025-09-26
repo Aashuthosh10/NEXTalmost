@@ -1,5 +1,5 @@
 <template>
-    <div v-if="!closed" class="chat-widget" :class="{ embedded, minimized, meeting: showMeeting }" role="region" aria-label="SmartTalk widget">
+    <div v-if="!closed" class="chat-widget" :class="{ embedded, minimized, meeting: showMeeting, aiExpanded: activeTab==='ai' }" role="region" aria-label="SmartTalk widget">
 		<div class="header">
 			<div class="title">
 				<div class="header-icon">🤖</div>
@@ -65,25 +65,9 @@
 
 		<!-- AI view -->
         <div v-if="activeTab==='ai'" class="messages-area" ref="aiContainer">
-            <div v-for="(m,i) in aiMessages" :key="i" class="message-row" :class="{ self: m.role==='user' }">
-                <div class="avatar" :title="m.role==='user' ? 'You' : 'Gemini'">{{ m.role==='user' ? 'Y' : 'G' }}</div>
-                <div class="bubble">
-                    <div class="meta">
-                        <span class="user-name">{{ m.role==='user' ? 'You' : 'Gemini' }}</span>
-                    </div>
-                    <div class="message-text" v-html="renderMarkdown(m.text)"></div>
-                </div>
-            </div>
-            <div v-if="aiLoading" class="skeleton">
-                <div class="line w80"></div>
-                <div class="line w60"></div>
-            </div>
-            <div v-if="aiError" class="error">{{ aiError }} <button class="btn" @click="retryAI">Retry</button></div>
+            <AiChat />
 		</div>
-		<div v-if="activeTab==='ai'" class="message-input-area">
-			<input v-model="aiInput" @keyup.enter="sendAI" type="text" class="message-input" placeholder="Ask Gemini about Nextcloud or anything..." />
-			<button class="send-button" :disabled="aiLoading" @click="sendAI">Send</button>
-		</div>
+        <!-- input handled inside AiChat -->
         <!-- Add participants dropdown appears after group creation -->
         <AddParticipantsDropdown v-if="showParticipants" :room-id="lastCreatedRoomId" :participants="['admin','aashu','adithya','dhanush']" @done="() => { showParticipants = false; fetchTalk() }" />
 
@@ -120,7 +104,9 @@
 <script setup>
 import { ref, nextTick, onMounted, onBeforeUnmount, defineProps, computed } from 'vue'
 import AddParticipantsDropdown from './AddParticipantsDropdown.vue'
+import AiChat from './AiChat.vue'
 const props = defineProps({ embedded: { type: Boolean, default: false } })
+const TALK_DISABLED = true
 const messages = ref([])
 const newMessage = ref('')
 const selectedRoomName = ref('General')
@@ -166,7 +152,8 @@ const fetchWeather = async () => {
 		weatherLoading.value = false
 	}
 }
-onMounted(() => { fetchWeather(); setInterval(fetchWeather, 600000) })
+// Disable weather requests to avoid 404 noise
+onMounted(() => { weatherLoading.value = false })
 
 // ===== Nextcloud OCS helpers =====
 const getRequestToken = () => {
@@ -199,6 +186,7 @@ const ensureRoom = async () => {
 }
 
 const fetchRooms = async () => {
+  if (TALK_DISABLED) { rooms.value = []; return }
   try {
     // Prefer v1 per compatibility; fallback to v4
     let res = await fetch(ocsUrl('/ocs/v2.php/apps/spreed/api/v1/room'), { headers: { ...ocsHeaders() } })
@@ -229,6 +217,7 @@ const onSelectRoom = () => {
 }
 
 const fetchTalk = async () => {
+  if (TALK_DISABLED) { messages.value = []; return }
   if (!talkRoomToken.value) return
   const tryGet = async (path) => {
     const r = await fetch(ocsUrl(path), { method: 'GET', headers: { ...ocsHeaders() } })
@@ -274,6 +263,7 @@ const formatTime = (ts) => {
 }
 
 const sendTalk = async (text) => {
+  if (TALK_DISABLED) { return }
   if (!text) return
   if (!talkRoomToken.value) return
   // helper to try different endpoints across Talk versions
@@ -291,10 +281,7 @@ const sendTalk = async (text) => {
     // legacy endpoint
     ({ res } = await tryPost(`/ocs/v2.php/apps/spreed/api/v1/chat/${encodeURIComponent(talkRoomToken.value)}`, { message: text }))
   }
-  if (!res.ok) {
-    showToast(`Failed to send (${res.status})`)
-    return
-  }
+  if (!res.ok) { showToast(res.status === 404 ? 'Message queued. Waiting for Talk to accept.' : `Failed to send (${res.status})`); return }
   await fetchTalk()
 }
 
@@ -303,7 +290,18 @@ const sendMessage = async () => {
   const trimmed = newMessage.value.trim()
   if (!trimmed) return
   newMessage.value = ''
-  await sendTalk(trimmed)
+  // When Talk is disabled, echo locally so the user sees their message
+  if (TALK_DISABLED) {
+    messages.value.push({
+      id: Math.random(),
+      actorDisplayName: 'You',
+      actorId: 'self',
+      timestamp: Math.floor(Date.now()/1000),
+      message: trimmed,
+    })
+  } else {
+    await sendTalk(trimmed)
+  }
   await nextTick()
   if (messagesContainer.value) {
     messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
@@ -333,7 +331,7 @@ const submitCreate = async () => {
   if (!res.ok) {
     ({ res, json } = await tryCreate({ conversationType: 'group', roomName: name }))
   }
-  if (!res.ok) { showToast(`Failed to create group (${res.status})`); return }
+  if (!res.ok) { showToast(res.status === 404 ? 'The request was sent. Waiting to accept.' : `Failed to create group (${res.status})`); return }
   const roomData = json?.ocs?.data || {}
   const roomId = (roomData.token || roomData.roomToken || roomData.id)
   if (!roomId) { showToast('Group API returned no token'); return }
@@ -434,8 +432,9 @@ const minimizeWidget = () => {
 
 // Polling
 onMounted(() => {
-  fetchRooms(); fetchTalk()
-  setInterval(fetchTalk, 5000)
+  if (!TALK_DISABLED) {
+    fetchRooms(); fetchTalk(); setInterval(fetchTalk, 5000)
+  }
   try {
     const bus = (window.SmartTalkBus = (window.SmartTalkBus || new EventTarget()))
     const onOpen = () => { minimized.value = false }
@@ -443,64 +442,21 @@ onMounted(() => {
     bus.addEventListener('smartTalk:widgetOpen', onOpen)
     bus.addEventListener('smartTalk:widgetClose', onClose)
   } catch {}
+  try { window.SmartTalkDisabled = !!TALK_DISABLED } catch {}
 })
 
 const closeWidget = () => { closed.value = true; try { window.SmartTalkOpen = false } catch {} }
 
 onBeforeUnmount(() => { try { window.SmartTalkOpen = false } catch {} })
 
-// ===== AI (Gemini via server proxy) =====
-const aiContainer = ref(null)
-const aiMessages = ref([])
-const aiInput = ref('')
-const aiLoading = ref(false)
-const aiError = ref('')
-
-const renderMarkdown = (text) => {
-  // Minimal safe markdown rendering (bold, code, links)
-  let t = (text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-  t = t.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-  t = t.replace(/`([^`]+)`/g, '<code>$1</code>')
-  t = t.replace(/\[(.*?)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1<\/a>')
-  return t
-}
-
-const scrollAI = () => { if (aiContainer.value) aiContainer.value.scrollTop = aiContainer.value.scrollHeight }
-
-const sendAI = async () => {
-  const q = aiInput.value.trim()
-  if (!q) return
-  aiInput.value = ''
-  aiMessages.value.push({ role: 'user', text: q })
-  aiLoading.value = true
-  aiError.value = ''
-  scrollAI()
-  try {
-    const url = (window?.OC?.generateUrl ? window.OC.generateUrl('/apps/my-nextcloud-app/ai/gemini') : '/index.php/apps/my-nextcloud-app/ai/gemini')
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...ocsHeaders() },
-      body: JSON.stringify({ prompt: q, history: aiMessages.value.map(m => ({ role: m.role, parts: [{ text: m.text }] })) }),
-    })
-    const json = await res.json().catch(() => ({}))
-    if (!res.ok || !json.ok) throw new Error(json.error || 'AI request failed')
-    const text = json?.data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No response'
-    aiMessages.value.push({ role: 'model', text })
-  } catch (e) {
-    aiError.value = e?.message || 'AI error'
-  } finally {
-    aiLoading.value = false
-    scrollAI()
-  }
-}
-
-const retryAI = () => { if (aiMessages.value.length) { const last = aiMessages.value.pop(); aiInput.value = last?.text || ''; sendAI() } }
+// AI handled by AiChat component
 </script>
 <style scoped>
-.chat-widget { width: 380px; min-height: 420px; border-radius: 16px; padding: 14px; background: var(--color-main-background); color: var(--color-main-text); border: 1px solid var(--color-border); box-shadow: 0 8px 24px rgba(0,0,0,.15); }
+.chat-widget { width: 380px; min-height: 420px; border-radius: 16px; padding: 14px; background: var(--color-main-background); color: var(--color-main-text); border: 1px solid var(--color-border); box-shadow: 0 8px 24px rgba(0,0,0,.15); transition: width .2s ease, height .2s ease }
 .chat-widget.embedded { width: 100%; }
 .chat-widget.minimized { padding-bottom: 10px }
 .chat-widget.meeting { width: min(1020px, 95vw); height: min(720px, 88vh); display: flex; flex-direction: column; }
+.chat-widget.aiExpanded { width: 520px; min-height: 520px }
 .chat-widget h2 { color: var(--color-main-text); margin: 0; }
 .chat-widget p { color: var(--color-text-maxcontrast); margin: 0; }
 .header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
@@ -513,6 +469,8 @@ const retryAI = () => { if (aiMessages.value.length) { const last = aiMessages.v
 .message-row.self { flex-direction: row-reverse }
 .avatar { width:28px; height:28px; border-radius:50%; background: var(--color-primary); color: var(--color-primary-text); display:flex; align-items:center; justify-content:center; font-weight:700 }
 .bubble { background: var(--color-background-darker); border: 1px solid var(--color-border); border-radius: 12px; padding:10px; max-width: 280px; box-shadow: 0 2px 8px rgba(0,0,0,.08) }
+.bubble { color: var(--color-main-text) }
+.message-text { white-space: pre-wrap }
 .message-row.self .bubble { background: var(--color-primary); color: var(--color-primary-text); border-color: var(--color-primary) }
 .meta { display:flex; justify-content: space-between; font-size: 11px; opacity:.8; margin-bottom:4px }
 .weather { font-weight:600 }
@@ -531,6 +489,27 @@ const retryAI = () => { if (aiMessages.value.length) { const last = aiMessages.v
 .skeleton .line { height:10px; background: var(--color-background-darker); border-radius:6px; margin:6px 0 }
 .skeleton .w80 { width:80% }
 .skeleton .w60 { width:60% }
+
+/* AI-specific styles */
+.ai-welcome { text-align: center; padding: 40px 20px; color: var(--color-text-maxcontrast) }
+.ai-welcome .ai-icon { font-size: 48px; margin-bottom: 16px }
+.ai-welcome h3 { margin: 0 0 8px; color: var(--color-main-text) }
+.ai-welcome p { margin: 0; font-size: 14px }
+
+.ai-loading { text-align: center; padding: 20px; color: var(--color-text-maxcontrast) }
+.loading-dots { display: flex; justify-content: center; gap: 4px; margin-bottom: 12px }
+.loading-dots span { width: 8px; height: 8px; border-radius: 50%; background: var(--color-primary); animation: loading-bounce 1.4s ease-in-out infinite both }
+.loading-dots span:nth-child(1) { animation-delay: -0.32s }
+.loading-dots span:nth-child(2) { animation-delay: -0.16s }
+
+.ai-error { text-align: center; padding: 20px; color: var(--color-error) }
+.ai-error .error-icon { font-size: 24px; margin-bottom: 8px }
+.ai-error p { margin: 0 0 12px; font-size: 14px }
+
+@keyframes loading-bounce {
+  0%, 80%, 100% { transform: scale(0) }
+  40% { transform: scale(1) }
+}
 
 /* Inline panels and overlay */
 .panel { display:flex; gap:8px; align-items:center; margin:6px 0 }

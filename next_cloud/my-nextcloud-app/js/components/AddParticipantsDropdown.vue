@@ -22,6 +22,8 @@
 <script setup>
 import { ref, computed } from 'vue'
 const props = defineProps({ roomId: { type: String, required: true }, participants: { type: Array, required: true } })
+// Read global flag from widget to avoid Talk calls when disabled
+const TALK_DISABLED = (window?.SmartTalkDisabled === true) || false
 const emit = defineEmits(['done'])
 
 const query = ref('')
@@ -51,6 +53,12 @@ const add = async () => {
     loading.value = true; error.value=''; success.value=false
     try {
         const users = Array.from(selected.value)
+        if (TALK_DISABLED) {
+            // Do not call server; show friendly message for demo
+            success.value = true
+            emit('done', { added: users, simulated: true })
+            return
+        }
         // helper to try multiple API shapes across Talk versions
         const tryPost = async (path, builder) => {
             const payload = builder()

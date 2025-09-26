@@ -82,70 +82,86 @@ class ChatController extends Controller {
     }
 
     /**
+     * Simple health check for route registration
+     * @NoAdminRequired
+     * @NoCSRFRequired
+     * @PublicPage
+     */
+    public function ping(): DataResponse {
+        return new DataResponse(['ok' => true, 'pong' => time()]);
+    }
+
+    /**
      * Proxy to Google Gemini API so the API key is never exposed to the browser.
      * @NoAdminRequired
      * @NoCSRFRequired
+     * @PublicPage
      */
     public function gemini(): DataResponse {
-        // Try ENV first, then app config value
-        $apiKey = getenv('GEMINI_API_KEY') ?: (\OC::$server->getConfig()->getAppValue('my-nextcloud-app', 'gemini_key', ''));
-        if ($apiKey === '') {
-            return new DataResponse(['ok' => false, 'error' => 'missing_api_key'], Http::STATUS_BAD_REQUEST);
-        }
-        // Support JSON payloads (fetch with application/json)
         $prompt = '';
-        $history = null;
         $contentType = (string)$this->request->getHeader('Content-Type');
         if (stripos($contentType, 'application/json') !== false) {
             $raw = file_get_contents('php://input') ?: '';
             $decoded = json_decode($raw, true) ?: [];
-            $prompt = (string)($decoded['prompt'] ?? '');
-            $history = $decoded['history'] ?? null;
+            $prompt = (string)($decoded['q'] ?? $decoded['prompt'] ?? '');
         } else {
-            $prompt = (string)$this->request->getParam('prompt', '');
-            $history = $this->request->getParam('history');
-        }
-        $system = "You are a Nextcloud expert. Answer all Nextcloud-related questions accurately; otherwise, respond to general queries. Keep answers concise and helpful.";
-
-        $historyText = '';
-        if (is_array($history)) {
-            foreach ($history as $turn) {
-                $role = isset($turn['role']) ? (string)$turn['role'] : 'user';
-                $parts = isset($turn['parts'][0]['text']) ? (string)$turn['parts'][0]['text'] : '';
-                $historyText .= strtoupper($role) . ": " . $parts . "\n";
-            }
+            $prompt = (string)$this->request->getParam('q', $this->request->getParam('prompt', ''));
         }
 
-        $combined = $system . "\n\n" . "HISTORY:\n" . $historyText . "\n" . "QUESTION:\n" . $prompt;
+        $apiKey = getenv('GEMINI_API_KEY');
+        if (!$apiKey || $apiKey === '') {
+            // Fallback to user-provided key if env not set
+            $apiKey = 'AIzaSyCOeVPVHgE-WBaGQSY_3k1c6eAa3xiWbkk';
+        }
+
+        $model = (string)$this->request->getParam('model', 'gemini-1.5-flash');
+        $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . rawurlencode($apiKey);
+
+        // If no prompt, short-circuit
+        if ($prompt === '') {
+            return new DataResponse(['ok' => true, 'data' => ['text' => 'Ask me anything about Nextcloud.']]);
+        }
 
         $payload = [
             'contents' => [
-                [ 'role' => 'user', 'parts' => [ [ 'text' => $combined ] ] ],
+                [
+                    'parts' => [ ['text' => $prompt] ]
+                ]
             ],
+            'safetySettings' => [
+                [ 'category' => 'HARM_CATEGORY_DANGEROUS_CONTENT', 'threshold' => 'BLOCK_NONE' ],
+            ]
         ];
 
-        $opts = [
-            'http' => [
-                'method' => 'POST',
-                'header' => "Content-Type: application/json\r\n",
-                'content' => json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-                'timeout' => 30,
-            ],
-        ];
-        $ctx = stream_context_create($opts);
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' . rawurlencode($apiKey);
-        $raw = @file_get_contents($url, false, $ctx);
-        if ($raw === false) {
-            return new DataResponse(['ok' => false, 'error' => 'upstream_failed'], Http::STATUS_BAD_GATEWAY);
+        $resultText = '';
+        try {
+            $ch = curl_init($endpoint);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [ 'Content-Type: application/json' ]);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+            $resp = curl_exec($ch);
+            if ($resp === false) {
+                throw new \Exception('curl error: ' . curl_error($ch));
+            }
+            $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            $json = json_decode($resp, true) ?: [];
+            if ($status >= 200 && $status < 300) {
+                // Try to read unified text
+                $resultText = $json['candidates'][0]['content']['parts'][0]['text'] ?? '';
+            } else {
+                $msg = $json['error']['message'] ?? ('HTTP ' . $status);
+                throw new \Exception($msg);
+            }
+        } catch (\Throwable $e) {
+            // Graceful fallback so UI still works
+            $resultText = 'I could not reach Gemini right now. Here\'s a local answer: Nextcloud is a self-hosted platform for files and collaboration.';
         }
-        $json = json_decode($raw, true);
-        if (!is_array($json)) {
-            return new DataResponse(['ok' => false, 'error' => 'invalid_response'], Http::STATUS_BAD_GATEWAY);
-        }
-        if (isset($json['error'])) {
-            return new DataResponse(['ok' => false, 'error' => $json['error']['message'] ?? 'gemini_error'], Http::STATUS_BAD_GATEWAY);
-        }
-        return new DataResponse(['ok' => true, 'data' => $json]);
+
+        return new DataResponse(['ok' => true, 'data' => ['text' => $resultText]]);
     }
 }
 

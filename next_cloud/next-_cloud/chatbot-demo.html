@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NextBot AI Assistant Demo</title>
+    <title>🤖 Smart Talk - Gemini AI Integration</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -58,10 +58,10 @@
     <div id="app" class="chat-container max-w-4xl w-full p-8">
         <div class="text-center mb-8">
             <h1 class="text-4xl font-bold text-gray-800 mb-4">
-                🤖 NextBot AI Assistant Demo
+                🤖 Smart Talk - Gemini AI Assistant
             </h1>
             <p class="text-xl text-gray-600 mb-6">
-                Intelligent chatbot with natural language processing
+                Powered by Google Gemini AI with advanced natural language understanding
             </p>
         </div>
 
@@ -73,11 +73,14 @@
                         🤖
                     </div>
                     <div>
-                        <h3 class="text-lg font-semibold text-gray-800">NextBot</h3>
-                        <p class="text-sm text-green-600">Online • AI Assistant</p>
+                        <h3 class="text-lg font-semibold text-gray-800">Gemini AI</h3>
+                        <p id="connection-status" class="text-sm text-yellow-600">Connecting...</p>
                     </div>
                 </div>
                 <div class="flex gap-2">
+                    <button @click="setupGeminiKey" class="px-3 py-1 bg-blue-100 text-blue-600 rounded-lg text-sm hover:bg-blue-200 transition-all">
+                        API Key
+                    </button>
                     <button @click="clearChat" class="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm hover:bg-gray-200 transition-all">
                         Clear
                     </button>
@@ -91,27 +94,30 @@
             <div class="h-96 overflow-y-auto space-y-4 mb-4" ref="messagesContainer">
                 <div v-for="message in messages" :key="message.id" class="message-bubble">
                     <div :class="message.isBot ? 'flex justify-start' : 'flex justify-end'">
-                        <div :class="message.isBot ? 'bg-gray-100' : 'bg-blue-500 text-white'" class="max-w-xs px-4 py-2 rounded-lg">
-                            <div class="flex items-center gap-2 mb-1">
-                                <span v-if="message.isBot" class="text-sm font-medium">🤖 NextBot</span>
+                        <div :class="message.isBot ? 'bg-gray-100' : 'bg-blue-500 text-white'" class="max-w-lg px-4 py-3 rounded-lg">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span v-if="message.isBot" class="text-sm font-medium">🤖 Gemini AI</span>
                                 <span v-else class="text-sm font-medium">You</span>
                                 <span class="text-xs opacity-75">{{ formatTime(message.timestamp) }}</span>
+                                <span v-if="message.isBot && message.model" class="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">{{ message.model }}</span>
                             </div>
-                            <p class="text-sm">{{ message.text }}</p>
+                            <div v-if="message.isBot" v-html="formatBotMessage(message.text)" class="text-sm prose prose-sm max-w-none"></div>
+                            <p v-else class="text-sm">{{ message.text }}</p>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Typing Indicator -->
                 <div v-if="isTyping" class="flex justify-start">
-                    <div class="bg-gray-100 px-4 py-2 rounded-lg">
+                    <div class="bg-gray-100 px-4 py-3 rounded-lg">
                         <div class="flex items-center gap-2">
-                            <span class="text-sm font-medium">🤖 NextBot</span>
+                            <span class="text-sm font-medium">🤖 Gemini AI</span>
                             <div class="typing-indicator flex gap-1">
                                 <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                                 <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
                                 <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
                             </div>
+                            <span class="text-xs text-gray-500">Thinking...</span>
                         </div>
                     </div>
                 </div>
@@ -123,16 +129,16 @@
                     v-model="newMessage"
                     @keyup.enter="sendMessage"
                     type="text"
-                    placeholder="Ask NextBot anything..."
-                    class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    :disabled="!botEnabled || isTyping"
+                    placeholder="Ask Gemini AI anything about Nextcloud, coding, or general questions..."
+                    class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    :disabled="!geminiEnabled || isTyping || !hasValidApiKey"
                 />
                 <button
                     @click="sendMessage"
-                    :disabled="!newMessage.trim() || !botEnabled || isTyping"
-                    class="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all"
+                    :disabled="!newMessage.trim() || !geminiEnabled || isTyping || !hasValidApiKey"
+                    class="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all font-medium"
                 >
-                    Send
+                    {{ isTyping ? 'Thinking...' : 'Send to Gemini' }}
                 </button>
             </div>
         </div>
@@ -153,25 +159,50 @@
             </div>
         </div>
 
-        <!-- Bot Capabilities -->
+        <!-- Gemini AI Capabilities -->
         <div class="bg-white rounded-lg shadow-lg p-6">
-            <h3 class="text-lg font-semibold mb-4 text-gray-800">NextBot Capabilities</h3>
+            <h3 class="text-lg font-semibold mb-4 text-gray-800">Gemini AI Capabilities</h3>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="text-center p-4 bg-green-50 rounded-lg">
-                    <div class="text-2xl mb-2">💬</div>
-                    <h4 class="font-semibold text-gray-800">Natural Language</h4>
-                    <p class="text-sm text-gray-600">Understands human language</p>
+                    <div class="text-2xl mb-2">🤖</div>
+                    <h4 class="font-semibold text-gray-800">Advanced AI</h4>
+                    <p class="text-sm text-gray-600">Powered by Google Gemini 1.5 Flash</p>
                 </div>
                 <div class="text-center p-4 bg-blue-50 rounded-lg">
-                    <div class="text-2xl mb-2">🎯</div>
-                    <h4 class="font-semibold text-gray-800">Context Aware</h4>
-                    <p class="text-sm text-gray-600">Remembers conversation context</p>
+                    <div class="text-2xl mb-2">📝</div>
+                    <h4 class="font-semibold text-gray-800">Rich Responses</h4>
+                    <p class="text-sm text-gray-600">Markdown formatting and code syntax</p>
                 </div>
                 <div class="text-center p-4 bg-purple-50 rounded-lg">
-                    <div class="text-2xl mb-2">⚡</div>
-                    <h4 class="font-semibold text-gray-800">Instant Response</h4>
-                    <p class="text-sm text-gray-600">Quick and accurate answers</p>
+                    <div class="text-2xl mb-2">🔗</div>
+                    <h4 class="font-semibold text-gray-800">Context Aware</h4>
+                    <p class="text-sm text-gray-600">Remembers conversation history</p>
                 </div>
+                <div class="text-center p-4 bg-yellow-50 rounded-lg">
+                    <div class="text-2xl mb-2">⚙️</div>
+                    <h4 class="font-semibold text-gray-800">Nextcloud Expert</h4>
+                    <p class="text-sm text-gray-600">Specialized in Nextcloud & Talk</p>
+                </div>
+                <div class="text-center p-4 bg-red-50 rounded-lg">
+                    <div class="text-2xl mb-2">📊</div>
+                    <h4 class="font-semibold text-gray-800">Code Assistant</h4>
+                    <p class="text-sm text-gray-600">Programming help and debugging</p>
+                </div>
+                <div class="text-center p-4 bg-indigo-50 rounded-lg">
+                    <div class="text-2xl mb-2">🚀</div>
+                    <h4 class="font-semibold text-gray-800">Real-time</h4>
+                    <p class="text-sm text-gray-600">Instant responses via API</p>
+                </div>
+            </div>
+            
+            <div class="mt-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+                <h4 class="font-semibold text-gray-800 mb-2">📝 Setup Instructions:</h4>
+                <ol class="text-sm text-gray-600 space-y-1">
+                    <li>1. Click the "API Key" button above</li>
+                    <li>2. Get your free Gemini API key from <a href="https://makersuite.google.com/app/apikey" target="_blank" class="text-blue-600 hover:underline">Google AI Studio</a></li>
+                    <li>3. Paste the API key when prompted</li>
+                    <li>4. Start chatting with Gemini AI!</li>
+                </ol>
             </div>
         </div>
     </div>
@@ -184,169 +215,285 @@
                 const messages = ref([
                     {
                         id: 1,
-                        text: "Hello! I'm NextBot, your AI assistant! How can I help you today?",
+                        text: "Hello! I'm Gemini AI, integrated into your Smart Talk system! I can help you with Nextcloud questions, coding problems, technical support, and much more. How can I assist you today?",
                         isBot: true,
-                        timestamp: Date.now() - 60000
+                        timestamp: Date.now() - 60000,
+                        model: "gemini-1.5-flash"
                     }
                 ]);
                 const newMessage = ref('');
                 const isTyping = ref(false);
-                const botEnabled = ref(true);
+                const geminiEnabled = ref(true);
                 const messagesContainer = ref(null);
+                const hasValidApiKey = ref(false);
+                
+                // Gemini AI Configuration
+                const GEMINI_API_KEY = ref('AIzaSyCK1OPSmlb3rxBd_d7a0B3WK43RaksoxUE');
+                const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent';
+                
+                // Store the API key in localStorage for persistence
+                localStorage.setItem('gemini_api_key', 'AIzaSyCK1OPSmlb3rxBd_d7a0B3WK43RaksoxUE');
+                
+                // Check API key on startup
+                hasValidApiKey.value = true;
+                testGeminiConnection();
 
                 const quickQuestions = [
-                    "How do I create a group?",
-                    "How do I start a video call?",
-                    "What features are available?",
-                    "Who are the users?",
-                    "How do I add reactions?",
-                    "What's the tech stack?",
-                    "How do I manage users?",
-                    "What can you help me with?"
+                    "How do I set up Nextcloud Talk for my team?",
+                    "What are the best security practices for Nextcloud?",
+                    "How can I optimize my Nextcloud server performance?",
+                    "What's the difference between Talk and other chat apps?",
+                    "How do I backup my Nextcloud data?",
+                    "Explain the Nextcloud app ecosystem",
+                    "Help me write a professional email",
+                    "What are the latest features in Nextcloud 28?"
                 ];
-
-                const botResponses = {
-                    greetings: [
-                        "Hello! I'm NextBot, your AI assistant! How can I help you today?",
-                        "Hi there! I'm here to help with any questions you might have!",
-                        "Hey! Welcome to Nextcloud Talk! I'm NextBot, ready to assist!",
-                        "Greetings! I'm your AI assistant. What can I do for you?"
-                    ],
-                    help: [
-                        "I can help you with:\n• Creating groups\n• Managing conversations\n• Starting video calls\n• Finding users\n• General questions about Nextcloud Talk",
-                        "Here's what I can do:\n• Answer questions about features\n• Help with group management\n• Assist with technical issues\n• Provide tips and tricks",
-                        "I'm here to help! Ask me about:\n• How to use Nextcloud Talk\n• Group creation and management\n• Video calling features\n• User management"
-                    ],
-                    groupCreation: [
-                        "To create a group:\n1. Click the 'New Group' button\n2. Enter a group name\n3. Select members from the list\n4. Click 'Create Group'",
-                        "Creating groups is easy! Just click the '+' button in the header, give your group a name, select members, and you're done!",
-                        "Need help creating a group? Click the 'New Group' button, choose a name, pick your members, and hit create!"
-                    ],
-                    videoCall: [
-                        "To start a video call:\n1. Click the 📞 button on any message\n2. Or click 'Start Call' in the message actions\n3. Your browser will ask for camera/microphone permission",
-                        "Starting a call is simple! Just click the phone icon next to any message or use the call button in the message actions.",
-                        "Video calls are one click away! Look for the 📞 button on messages or in the message actions menu."
-                    ],
-                    users: [
-                        "Current users in the system:\n• Aashu (aashu123)\n• Admin (admin123)\n• Adithya (adithya123)\n• Dhanush (dhanush123)",
-                        "Here are the available users:\n• Aashu - Project Lead\n• Admin - System Administrator\n• Adithya - Developer\n• Dhanush - Designer",
-                        "The team consists of:\n• Aashu (Online)\n• Admin (Online)\n• Adithya (Offline)\n• Dhanush (Online)"
-                    ],
-                    features: [
-                        "Nextcloud Talk features:\n• Real-time messaging\n• Group conversations\n• Video/audio calls\n• File sharing\n• Emoji reactions\n• Online status\n• Message history",
-                        "Key features include:\n• Instant messaging\n• Group management\n• Video calling\n• File sharing\n• Emoji reactions\n• User presence\n• Search functionality",
-                        "Available features:\n• Chat messaging\n• Group creation\n• Video calls\n• File sharing\n• Reactions\n• Notifications\n• Mobile support"
-                    ],
-                    technical: [
-                        "Technical details:\n• Built with Vue.js 3\n• Uses Nextcloud Talk API\n• Real-time WebSocket connections\n• Docker containerized\n• Responsive design",
-                        "This is built with:\n• Vue.js for the frontend\n• Nextcloud for the backend\n• Docker for deployment\n• WebSocket for real-time updates",
-                        "Tech stack:\n• Frontend: Vue.js, Tailwind CSS\n• Backend: Nextcloud, PHP\n• Database: MariaDB\n• Cache: Redis"
-                    ],
-                    encouragement: [
-                        "You're doing great! This is an amazing hackathon project! 🚀",
-                        "Keep up the excellent work! This project is really impressive! 💪",
-                        "Wow! This is definitely a 10/10 hackathon project! 🏆",
-                        "Fantastic work! The judges are going to love this! ⭐"
-                    ],
-                    default: [
-                        "I'm not sure I understand that. Can you ask me about groups, video calls, users, or features?",
-                        "Hmm, I didn't catch that. Try asking about creating groups, starting calls, or user management!",
-                        "I'm still learning! Ask me about Nextcloud Talk features, group creation, or how to use the system.",
-                        "Not sure about that one. I can help with groups, calls, users, or general questions about the platform!"
-                    ]
-                };
-
-                const processMessage = (message) => {
-                    const lowerMessage = message.toLowerCase().trim();
+                
+                function updateConnectionStatus(status, className) {
+                    const statusEl = document.getElementById('connection-status');
+                    if (statusEl) {
+                        statusEl.textContent = status;
+                        statusEl.className = `text-sm ${className}`;
+                    }
+                }
+                
+                async function testGeminiConnection() {
+                    if (!GEMINI_API_KEY.value) {
+                        updateConnectionStatus('No API Key', 'text-red-600');
+                        return false;
+                    }
                     
-                    if (isGreeting(lowerMessage)) return getRandomResponse('greetings');
-                    if (isHelpRequest(lowerMessage)) return getRandomResponse('help');
-                    if (isGroupRelated(lowerMessage)) return getRandomResponse('groupCreation');
-                    if (isCallRelated(lowerMessage)) return getRandomResponse('videoCall');
-                    if (isUserRelated(lowerMessage)) return getRandomResponse('users');
-                    if (isFeatureRelated(lowerMessage)) return getRandomResponse('features');
-                    if (isTechnicalQuestion(lowerMessage)) return getRandomResponse('technical');
-                    if (isEncouragement(lowerMessage)) return getRandomResponse('encouragement');
+                    try {
+                        updateConnectionStatus('Testing connection...', 'text-yellow-600');
+                        
+                        const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY.value}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                contents: [{
+                                    parts: [{ text: 'Hello, please respond with "API connection successful" to confirm the connection.' }]
+                                }]
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`API Error: ${response.status} ${response.statusText}`);
+                        }
+                        
+                        const data = await response.json();
+                        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response';
+                        
+                        hasValidApiKey.value = true;
+                        updateConnectionStatus('Connected • Gemini AI Ready', 'text-green-600');
+                        
+                        console.log('Gemini AI connection successful:', text);
+                        return true;
+                        
+                    } catch (error) {
+                        console.error('Gemini connection failed:', error);
+                        hasValidApiKey.value = false;
+                        updateConnectionStatus(`Connection failed: ${error.message}`, 'text-red-600');
+                        return false;
+                    }
+                }
+                
+                async function callGeminiAPI(prompt, conversationHistory = []) {
+                    try {
+                        // Build conversation context
+                        const contents = [];
+                        
+                        // Add conversation history (last 10 messages for context)
+                        const recentMessages = conversationHistory.slice(-10);
+                        for (const msg of recentMessages) {
+                            if (msg.role === 'user') {
+                                contents.push({
+                                    role: 'user',
+                                    parts: [{ text: msg.text }]
+                                });
+                            } else if (msg.role === 'model') {
+                                contents.push({
+                                    role: 'model',
+                                    parts: [{ text: msg.text }]
+                                });
+                            }
+                        }
+                        
+                        // Add current prompt with context
+                        const contextPrompt = `Context: You are an AI assistant integrated into Nextcloud Smart Talk, a collaboration platform. You're helping users with Nextcloud-related questions, technical support, coding help, and general assistance. Be helpful, accurate, and concise.
+
+User question: ${prompt}`;
+                        
+                        contents.push({
+                            role: 'user',
+                            parts: [{ text: contextPrompt }]
+                        });
+                        
+                        const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY.value}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                contents: contents,
+                                generationConfig: {
+                                    temperature: 0.7,
+                                    topK: 40,
+                                    topP: 0.95,
+                                    maxOutputTokens: 2048,
+                                },
+                                safetySettings: [
+                                    {
+                                        category: "HARM_CATEGORY_HARASSMENT",
+                                        threshold: "BLOCK_MEDIUM_AND_ABOVE"
+                                    },
+                                    {
+                                        category: "HARM_CATEGORY_HATE_SPEECH",
+                                        threshold: "BLOCK_MEDIUM_AND_ABOVE"
+                                    }
+                                ]
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            const errorData = await response.json().catch(() => ({}));
+                            throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+                        }
+                        
+                        const data = await response.json();
+                        
+                        if (!data.candidates?.[0]?.content?.parts?.[0]?.text) {
+                            throw new Error('No response generated. The content may have been filtered.');
+                        }
+                        
+                        return {
+                            text: data.candidates[0].content.parts[0].text,
+                            model: 'gemini-1.5-flash',
+                            finishReason: data.candidates[0].finishReason
+                        };
+                        
+                    } catch (error) {
+                        console.error('Gemini API error:', error);
+                        throw error;
+                    }
+                }
+                
+                function formatBotMessage(text) {
+                    // Enhanced markdown-style formatting for Gemini responses
+                    let html = text
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
                     
-                    return getRandomResponse('default');
+                    // Headers
+                    html = html.replace(/^### (.*$)/gm, '<h3 class="text-lg font-semibold mt-4 mb-2">$1</h3>');
+                    html = html.replace(/^## (.*$)/gm, '<h2 class="text-xl font-semibold mt-4 mb-2">$1</h2>');
+                    html = html.replace(/^# (.*$)/gm, '<h1 class="text-2xl font-bold mt-4 mb-2">$1</h1>');
+                    
+                    // Bold and italic
+                    html = html.replace(/\*\*\*(.*?)\*\*\*/g, '<strong class="font-bold"><em class="italic">$1</em></strong>');
+                    html = html.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold">$1</strong>');
+                    html = html.replace(/\*(.*?)\*/g, '<em class="italic">$1</em>');
+                    
+                    // Code blocks
+                    html = html.replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre class="bg-gray-800 text-green-400 p-3 rounded-lg mt-2 mb-2 overflow-x-auto"><code class="language-$1 text-sm">$2</code></pre>');
+                    html = html.replace(/`([^`]+)`/g, '<code class="bg-gray-200 px-2 py-1 rounded text-sm font-mono">$1</code>');
+                    
+                    // Lists
+                    html = html.replace(/^\* (.*$)/gm, '<li class="ml-4 list-disc">$1</li>');
+                    html = html.replace(/^\d+\. (.*$)/gm, '<li class="ml-4 list-decimal">$1</li>');
+                    html = html.replace(/(<li[^>]*>.*<\/li>)/s, '<ul class="my-2">$1</ul>');
+                    
+                    // Links
+                    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer" class="text-blue-600 hover:text-blue-800 underline">$1</a>');
+                    
+                    // Line breaks
+                    html = html.replace(/\n\n/g, '</p><p class="mb-2">');
+                    html = html.replace(/\n/g, '<br>');
+                    
+                    // Wrap in paragraphs if not already structured
+                    if (!html.includes('<h') && !html.includes('<ul') && !html.includes('<pre') && !html.includes('<p')) {
+                        html = '<p class="mb-2">' + html + '</p>';
+                    }
+                    
+                    return html;
+                }
+                
+                const setupGeminiKey = () => {
+                    const key = prompt('Please enter your Gemini API key:\n\nYou can get a free API key from:\nhttps://makersuite.google.com/app/apikey');
+                    
+                    if (key && key.trim()) {
+                        GEMINI_API_KEY.value = key.trim();
+                        localStorage.setItem('gemini_api_key', key.trim());
+                        testGeminiConnection();
+                    }
                 };
-
-                const isGreeting = (message) => {
-                    const greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'greetings', 'howdy'];
-                    return greetings.some(greeting => message.includes(greeting));
-                };
-
-                const isHelpRequest = (message) => {
-                    const helpWords = ['help', 'assist', 'support', 'guide', 'how to', 'what can', 'what do', 'commands'];
-                    return helpWords.some(word => message.includes(word));
-                };
-
-                const isGroupRelated = (message) => {
-                    const groupWords = ['group', 'create group', 'new group', 'add group', 'group chat', 'team chat'];
-                    return groupWords.some(word => message.includes(word));
-                };
-
-                const isCallRelated = (message) => {
-                    const callWords = ['call', 'video', 'audio', 'meeting', 'conference', 'phone', 'start call', 'video call'];
-                    return callWords.some(word => message.includes(word));
-                };
-
-                const isUserRelated = (message) => {
-                    const userWords = ['user', 'users', 'people', 'team', 'members', 'who', 'aashu', 'admin', 'adithya', 'dhanush'];
-                    return userWords.some(word => message.includes(word));
-                };
-
-                const isFeatureRelated = (message) => {
-                    const featureWords = ['feature', 'features', 'what can', 'capabilities', 'functions', 'options', 'tools'];
-                    return featureWords.some(word => message.includes(word));
-                };
-
-                const isTechnicalQuestion = (message) => {
-                    const techWords = ['technical', 'tech', 'built', 'technology', 'stack', 'api', 'code', 'development'];
-                    return techWords.some(word => message.includes(word));
-                };
-
-                const isEncouragement = (message) => {
-                    const encouragementWords = ['great', 'awesome', 'amazing', 'excellent', 'good job', 'well done', 'impressive', 'fantastic'];
-                    return encouragementWords.some(word => message.includes(word));
-                };
-
-                const getRandomResponse = (category) => {
-                    const responses = botResponses[category] || botResponses.default;
-                    return responses[Math.floor(Math.random() * responses.length)];
-                };
-
+                
                 const sendMessage = async () => {
-                    if (!newMessage.value.trim() || !botEnabled.value) return;
+                    if (!newMessage.value.trim() || !geminiEnabled.value || !hasValidApiKey.value) {
+                        if (!hasValidApiKey.value) {
+                            alert('Please set up your Gemini API key first!');
+                            setupGeminiKey();
+                        }
+                        return;
+                    }
                     
                     const messageText = newMessage.value.trim();
                     newMessage.value = '';
                     
                     // Add user message
-                    messages.value.push({
+                    const userMessage = {
                         id: Date.now(),
                         text: messageText,
                         isBot: false,
                         timestamp: Date.now()
-                    });
+                    };
+                    messages.value.push(userMessage);
                     
                     await nextTick();
                     scrollToBottom();
                     
-                    if (botEnabled.value) {
+                    if (geminiEnabled.value && hasValidApiKey.value) {
                         isTyping.value = true;
                         
-                        // Simulate bot thinking time
-                        await new Promise(resolve => setTimeout(resolve, 1500));
-                        
-                        // Get bot response
-                        const botResponse = processMessage(messageText);
-                        messages.value.push({
-                            id: Date.now() + 1,
-                            text: botResponse,
-                            isBot: true,
-                            timestamp: Date.now()
-                        });
+                        try {
+                            // Prepare conversation history for context
+                            const conversationHistory = messages.value.map(msg => ({
+                                role: msg.isBot ? 'model' : 'user',
+                                text: msg.text
+                            }));
+                            
+                            // Call Gemini API
+                            const response = await callGeminiAPI(messageText, conversationHistory);
+                            
+                            // Add bot response
+                            const botMessage = {
+                                id: Date.now() + 1,
+                                text: response.text,
+                                isBot: true,
+                                timestamp: Date.now(),
+                                model: response.model
+                            };
+                            messages.value.push(botMessage);
+                            
+                            updateConnectionStatus('Connected • Response received', 'text-green-600');
+                            
+                        } catch (error) {
+                            console.error('Error calling Gemini API:', error);
+                            
+                            // Add error message
+                            messages.value.push({
+                                id: Date.now() + 1,
+                                text: `Sorry, I encountered an error: ${error.message}. Please check your API key and try again.`,
+                                isBot: true,
+                                timestamp: Date.now(),
+                                model: 'error'
+                            });
+                            
+                            updateConnectionStatus(`Error: ${error.message}`, 'text-red-600');
+                            hasValidApiKey.value = false;
+                        }
                         
                         isTyping.value = false;
                         await nextTick();
@@ -362,14 +509,18 @@
                 const clearChat = () => {
                     messages.value = [{
                         id: 1,
-                        text: "Hello! I'm NextBot, your AI assistant! How can I help you today?",
+                        text: "Hello! I'm Gemini AI, integrated into your Smart Talk system! I can help you with Nextcloud questions, coding problems, technical support, and much more. How can I assist you today?",
                         isBot: true,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        model: "gemini-1.5-flash"
                     }];
                 };
 
                 const toggleBot = () => {
-                    botEnabled.value = !botEnabled.value;
+                    geminiEnabled.value = !geminiEnabled.value;
+                    if (geminiEnabled.value && !hasValidApiKey.value) {
+                        setupGeminiKey();
+                    }
                 };
 
                 const formatTime = (timestamp) => {
@@ -387,14 +538,17 @@
                     messages,
                     newMessage,
                     isTyping,
-                    botEnabled,
+                    geminiEnabled,
                     messagesContainer,
                     quickQuestions,
+                    hasValidApiKey,
                     sendMessage,
                     askQuestion,
                     clearChat,
                     toggleBot,
-                    formatTime
+                    formatTime,
+                    setupGeminiKey,
+                    formatBotMessage
                 };
             }
         }).mount('#app');

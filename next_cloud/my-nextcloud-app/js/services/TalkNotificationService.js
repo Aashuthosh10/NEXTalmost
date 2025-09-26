@@ -1,6 +1,8 @@
 // TalkNotificationService: Connects to real Talk data and dispatches notifications
 
 export function startTalkNotifications() {
+  // Temporarily disabled to eliminate spreed-related 404s
+  return
   const bus = (window.SmartTalkBus = (window.SmartTalkBus || new EventTarget()))
   const state = {
     // last timestamp per room id

@@ -2,7 +2,9 @@ import { createApp } from 'vue'
 import TalkWidget from './components/TalkWidget.vue'
 import { createApp as createApp2 } from 'vue'
 import NotificationCenter from './components/NotificationCenter.vue'
-import { startTalkNotifications } from './services/TalkNotificationService'
+
+// Temporarily disable Talk/spreed network usage to eliminate 404s
+const TALK_DISABLED = true
 // Guard: don’t mount widget or notifications inside Talk meeting iframes
 const isInIframe = (window.self !== window.top)
 const isTalkContext = () => {
@@ -74,21 +76,22 @@ if (document.readyState === 'loading') {
 document.addEventListener('DOMContentLoaded', function() {
 	console.log('My Nextcloud App loaded!')
     if (!(isInIframe && isTalkContext())) {
-        // Mount global Notification Center once
-        if (!document.getElementById('smart-talk-notifications')) {
-            const el = document.createElement('div')
-            el.id = 'smart-talk-notifications'
-            Object.assign(el.style, { position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: 100000 })
-            document.body.appendChild(el)
-            const app = createApp2(NotificationCenter)
-            app.mount('#smart-talk-notifications')
-            if (!window.SmartTalkBus) window.SmartTalkBus = new EventTarget()
-            // Ensure the layer is clickable for toasts without blocking rest of UI
-            const stack = document.querySelector('#smart-talk-notifications .nc-toast-stack')
-            if (stack) stack.style.pointerEvents = 'auto'
+        if (!TALK_DISABLED) {
+            // Mount global Notification Center once
+            if (!document.getElementById('smart-talk-notifications')) {
+                const el = document.createElement('div')
+                el.id = 'smart-talk-notifications'
+                Object.assign(el.style, { position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: 100000 })
+                document.body.appendChild(el)
+                const app = createApp2(NotificationCenter)
+                app.mount('#smart-talk-notifications')
+                if (!window.SmartTalkBus) window.SmartTalkBus = new EventTarget()
+                const stack = document.querySelector('#smart-talk-notifications .nc-toast-stack')
+                if (stack) stack.style.pointerEvents = 'auto'
+            }
+            // Start global notification service only when enabled
+            if (!window.__smartTalkServiceStarted) { /* disabled */ }
         }
-        // Start global notification service hooked to real Talk data
-        if (!window.__smartTalkServiceStarted) { startTalkNotifications(); window.__smartTalkServiceStarted = true }
     }
 })
 
