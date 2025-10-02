@@ -20,6 +20,7 @@ services:
       - NEXTCLOUD_TRUSTED_DOMAINS=localhost
       - REDIS_HOST=redis
       - REDIS_HOST_PASSWORD=redis_password
+      - GEMINI_API_KEY=AIzaSyCQsjUIAYUdVylSvxfGgbd6t-nZmE_jnlM
     depends_on:
       - db
 

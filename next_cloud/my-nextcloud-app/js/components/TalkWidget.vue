@@ -419,11 +419,15 @@ const minimizeWidget = () => {
     const mount = document.getElementById('talk-widget-mount')
     if (!mount) return
     if (minimized.value) {
-      mount.style.transform = 'translateY(120%)'
+      // exit with subtle scale + slide
+      mount.style.transition = 'transform .36s cubic-bezier(0.4,0,1,1), opacity .22s ease-in'
+      mount.style.transform = 'scale(0.92) translateY(24px)'
       mount.style.opacity = '0'
       window.SmartTalkOpen = false
     } else {
-      mount.style.transform = 'translateY(0)'
+      // springy re-open
+      mount.style.transition = 'transform .46s cubic-bezier(0.34,1.56,0.64,1), opacity .32s ease-out'
+      mount.style.transform = 'scale(1) translateY(0)'
       mount.style.opacity = '1'
       window.SmartTalkOpen = true
     }
@@ -462,8 +466,8 @@ onBeforeUnmount(() => { try { window.SmartTalkOpen = false } catch {} })
 .header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
 .title { display:flex; align-items:center; gap:10px }
 .header-controls { display:flex; gap:8px }
-.icon-btn { width:36px; height:36px; border-radius:10px; border:1px solid var(--color-border); background: linear-gradient(135deg,#6a5acd,#7c3aed); color:#fff; font-weight:700; cursor:pointer }
-.icon-btn:hover { filter: brightness(1.05) }
+.icon-btn { width:36px; height:36px; border-radius:10px; border:1px solid var(--color-border); background: linear-gradient(135deg,#6a5acd,#7c3aed); color:#fff; font-weight:700; cursor:pointer; transition: transform .2s ease, background .2s ease, box-shadow .2s ease }
+.icon-btn:hover { filter: brightness(1.05); transform: translateY(-1px) }
 .messages-area { max-height: 520px; overflow-y: auto; padding-right:6px }
 .message-row { display:flex; gap:8px; margin:8px 0; align-items:flex-end }
 .message-row.self { flex-direction: row-reverse }
@@ -476,11 +480,12 @@ onBeforeUnmount(() => { try { window.SmartTalkOpen = false } catch {} })
 .weather { font-weight:600 }
 .toolbar { display:flex; gap:8px; align-items:center; margin-bottom:8px }
 .toolbar-actions { display:flex; gap:8px }
-.btn { padding:6px 10px; border-radius:10px; border:1px solid var(--color-border); background: var(--color-background-darker); color: var(--color-main-text); cursor:pointer; transition: transform .2s ease, background .2s ease }
+.btn { padding:6px 10px; border-radius:10px; border:1px solid var(--color-border); background: var(--color-background-darker); color: var(--color-main-text); cursor:pointer; transition: transform .2s ease, background .2s ease, box-shadow .2s ease }
 .btn:hover { transform: translateY(-1px); background: var(--color-background-hover) }
 .message-input-area { display:flex; gap:8px; margin-top:10px }
 .message-input { flex:1; padding:10px; border-radius: 10px; border:1px solid var(--color-border); background: var(--color-background-darker); color: var(--color-main-text) }
-.send-button { padding:8px 12px; border-radius:10px; border:none; background: var(--color-primary); color: var(--color-primary-text); cursor:pointer }
+.send-button { padding:8px 12px; border-radius:10px; border:none; background: var(--color-primary); color: var(--color-primary-text); cursor:pointer; transition: transform .2s ease, box-shadow .2s ease }
+.send-button:hover { transform: translateY(-1px) }
 .room-select { padding: 8px 12px; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-background-darker); color: var(--color-main-text); cursor: pointer; font-size: 14px; }
 .tabs { display:flex; gap:6px; margin:6px 0 10px }
 .tab { padding:8px 12px; border-radius:10px; border:1px solid var(--color-border); background: var(--color-background-darker); color: var(--color-main-text); cursor:pointer }

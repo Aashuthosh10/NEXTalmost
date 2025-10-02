@@ -8,6 +8,7 @@ use OCP\IL10N;
 use OCP\IUserSession;
 use OCA\MyNextcloudApp\Service\ChatService;
 use OCA\MyNextcloudApp\Controller\ChatController;
+use OCA\MyNextcloudApp\Controller\PageController;
 
 class Application extends App {
 	public const APP_ID = 'my-nextcloud-app';
@@ -31,5 +32,15 @@ class Application extends App {
 				$c->query(IUserSession::class),
 			);
 		});
+
+		$container->registerService(PageController::class, function(IAppContainer $c) {
+			return new PageController(
+				self::APP_ID,
+				$c->query('Request'),
+			);
+		});
+
+		// Register routes
+		$this->registerRoutes();
 	}
 }

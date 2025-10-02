@@ -4,6 +4,6 @@ services:
       - "8081:80"
     environment:
       - OPENWEATHER_API_KEY=${OPENWEATHER_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_API_KEY=AIzaSyCQsjUIAYUdVylSvxfGgbd6t-nZmE_jnlM
 
 

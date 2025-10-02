@@ -110,11 +110,12 @@ class ChatController extends Controller {
 
         $apiKey = getenv('GEMINI_API_KEY');
         if (!$apiKey || $apiKey === '') {
-            // Fallback to user-provided key if env not set
-            $apiKey = 'AIzaSyCOeVPVHgE-WBaGQSY_3k1c6eAa3xiWbkk';
+            // Fallback key (user-provided in request): WARNING – env should be preferred in production
+            $apiKey = 'AIzaSyCQsjUIAYUdVylSvxfGgbd6t-nZmE_jnlM';
         }
 
-        $model = (string)$this->request->getParam('model', 'gemini-1.5-flash');
+        // Default model to Gemini 2.5 Flash for better performance
+        $model = (string)$this->request->getParam('model', 'gemini-2.5-flash');
         $endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/' . rawurlencode($model) . ':generateContent?key=' . rawurlencode($apiKey);
 
         // If no prompt, short-circuit
@@ -122,11 +123,43 @@ class ChatController extends Controller {
             return new DataResponse(['ok' => true, 'data' => ['text' => 'Ask me anything about Nextcloud.']]);
         }
 
+        $systemPrompt = "You are an AI assistant integrated into a custom Nextcloud widget project called 'Smart Talk.'
+
+Your job is to help the user understand anything about:
+- The project implementation (frontend/backend/UX)
+- How it integrates with Nextcloud (Talk, theming, APIs)
+
+Only answer if the question is about this project or Nextcloud.
+For unrelated questions (e.g., general facts, celebrities, jokes), say:  
+> 'I'm here to help only with Smart Talk and Nextcloud-related queries.'
+
+Always answer in a clear, helpful, technically accurate manner.
+
+Project Context:
+- Vue.js 3 (Composition API) frontend
+- PHP 8 with Nextcloud App Framework backend  
+- Gemini AI (proxied server-side)
+- Glassmorphism UI, mobile responsiveness, and accessibility
+- Real-time message handling, Talk API integration, AI tab with persistent chat
+- Smart Talk/AI tabs, embedded iframe meetings";
+
+        // Log prompt/model for debugging short-term (remove in production)
+        @error_log('my-nextcloud-app gemini prompt="' . substr($prompt, 0, 200) . '" model=' . $model);
+
         $payload = [
+            // Provide instruction via systemInstruction to avoid polluting user content
+            'systemInstruction' => [
+                'role' => 'system',
+                'parts' => [ ['text' => $systemPrompt] ]
+            ],
             'contents' => [
-                [
-                    'parts' => [ ['text' => $prompt] ]
-                ]
+                [ 'role' => 'user', 'parts' => [ ['text' => $prompt] ] ],
+            ],
+            'generationConfig' => [
+                'temperature' => 0.2,
+                'topK' => 40,
+                'topP' => 0.95,
+                'maxOutputTokens' => 2048,
             ],
             'safetySettings' => [
                 [ 'category' => 'HARM_CATEGORY_DANGEROUS_CONTENT', 'threshold' => 'BLOCK_NONE' ],
@@ -134,33 +167,53 @@ class ChatController extends Controller {
         ];
 
         $resultText = '';
-        try {
-            $ch = curl_init($endpoint);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [ 'Content-Type: application/json' ]);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
-            $resp = curl_exec($ch);
-            if ($resp === false) {
-                throw new \Exception('curl error: ' . curl_error($ch));
-            }
-            $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
+        $attempts = 0; $maxAttempts = 3; $lastError = '';
+        do {
+            $attempts++;
+            try {
+                $ch = curl_init($endpoint);
+                curl_setopt($ch, CURLOPT_POST, true);
+                curl_setopt($ch, CURLOPT_HTTPHEADER, [ 'Content-Type: application/json' ]);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 25);
+                $resp = curl_exec($ch);
+                if ($resp === false) {
+                    throw new \Exception('curl error: ' . curl_error($ch));
+                }
+                $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                curl_close($ch);
 
-            $json = json_decode($resp, true) ?: [];
-            if ($status >= 200 && $status < 300) {
-                // Try to read unified text
-                $resultText = $json['candidates'][0]['content']['parts'][0]['text'] ?? '';
-            } else {
-                $msg = $json['error']['message'] ?? ('HTTP ' . $status);
-                throw new \Exception($msg);
+                $json = json_decode($resp, true) ?: [];
+                if ($status >= 200 && $status < 300) {
+                    // Join all parts from first available candidate
+                    $resultText = '';
+                    if (!empty($json['candidates'])) {
+                        foreach ($json['candidates'] as $candidate) {
+                            if (!empty($candidate['content']['parts'])) {
+                                foreach ($candidate['content']['parts'] as $part) {
+                                    $resultText .= (string)($part['text'] ?? '');
+                                }
+                            }
+                            if ($resultText !== '') break;
+                        }
+                    }
+                    if ($resultText !== '') break;
+                } else {
+                    $msg = $json['error']['message'] ?? ('HTTP ' . $status);
+                    $lastError = $msg;
+                    if ($status == 429 && $attempts < $maxAttempts) { usleep(400000); continue; }
+                    throw new \Exception($msg);
+                }
+            } catch (\Throwable $e) {
+                // Graceful fallback so UI still works
+                if ($attempts < $maxAttempts) { usleep(300000); continue; }
             }
-        } catch (\Throwable $e) {
-            // Graceful fallback so UI still works
-            $resultText = 'I could not reach Gemini right now. Here\'s a local answer: Nextcloud is a self-hosted platform for files and collaboration.';
+        } while ($attempts < $maxAttempts && $resultText === '');
+
+        if ($resultText === '') {
+            $resultText = "I couldn't reach Gemini just now. Please try again in a moment.";
         }
-
         return new DataResponse(['ok' => true, 'data' => ['text' => $resultText]]);
     }
 }
